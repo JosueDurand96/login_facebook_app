@@ -1,13 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'main.dart'; //important fix
+import 'login.dart'; //important fix
 
 class DetailedScreen extends StatelessWidget {
   final UserInfoDetails detailsUser;
 
-  // DetailScreen({
-  //   Key key,
-  //   this.name}) : super(key: key);
+//   DetailScreen({
+//     Key key,
+//     this.name}) : super(key: key);
 
   DetailedScreen({Key key, @required this.detailsUser}) : super(key: key);
 
