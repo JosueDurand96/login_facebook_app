@@ -3,10 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:login_facebook_app/utils/colors.dart';
 import 'menu.dart';
 import 'dart:async';
+import 'dart:convert' show json;
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:flutter/services.dart';
+
 import 'package:flutter_facebook_login/flutter_facebook_login.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'DetailedScreen.dart';
-
+import 'package:google_sign_in/google_sign_in.dart';
 
 class LoginPage extends StatefulWidget {
   static String tag = 'login-page';
@@ -14,7 +19,100 @@ class LoginPage extends StatefulWidget {
   _LoginPageState createState() => new _LoginPageState();
 }
 
+GoogleSignIn _googleSignIn = new GoogleSignIn(
+  scopes: [
+    'email',
+    'https://www.googleapis.com/auth/contacts.readonly',
+  ],
+);
+//
+//Future<void> _handleSignIn() async{
+//  try{
+//    await _googleSignIn.signIn();
+//    print("CORREO"+_googleSignIn.currentUser.displayName);
+//  }catch(error){
+//    print(error);
+//  }
+//}
+
+
+
 class _LoginPageState extends State<LoginPage> {
+  GoogleSignInAccount _currentUser;
+  String _contactText;
+
+  @override
+  void initState() {
+    super.initState();
+    _googleSignIn.onCurrentUserChanged.listen((GoogleSignInAccount account) {
+      setState(() {
+        _currentUser = account;
+      });
+      if (_currentUser != null) {
+        _handleGetContact();
+      }
+    });
+    _googleSignIn.signInSilently();
+  }
+
+  Future<void> _handleGetContact() async {
+    setState(() {
+      _contactText = "Cargando Informacion del contacto...";
+    });
+    final http.Response response = await http.get(
+      'https://people.googleapis.com/v1/people/me/connections'
+          '?requestMask.includeField=person.names',
+      headers: await _currentUser.authHeaders,
+    );
+    if (response.statusCode != 200) {
+      setState(() {
+        _contactText = "People API gave a ${response.statusCode} "
+            "response. Check logs for details.";
+      });
+      print('People API ${response.statusCode} response: ${response.body}');
+      return;
+    }
+    final Map<String, dynamic> data = json.decode(response.body);
+    final String namedContact = _pickFirstNamedContact(data);
+    setState(() {
+      if (namedContact != null) {
+        _contactText = "I see you know $namedContact!";
+      } else {
+        _contactText = "o hay contactos para mostrar.";
+      }
+    });
+  }
+
+  String _pickFirstNamedContact(Map<String, dynamic> data) {
+    final List<dynamic> connections = data['connections'];
+    final Map<String, dynamic> contact = connections?.firstWhere(
+          (dynamic contact) => contact['names'] != null,
+      orElse: () => null,
+    );
+    if (contact != null) {
+      final Map<String, dynamic> name = contact['names'].firstWhere(
+            (dynamic name) => name['displayName'] != null,
+        orElse: () => null,
+      );
+      if (name != null) {
+        return name['displayName'];
+      }
+    }
+    return null;
+  }
+
+  Future<void> _handleSignIn() async {
+    try {
+      await _googleSignIn.signIn();
+    } catch (error) {
+      print(error);
+    }
+  }
+
+  Future<void> _handleSignOut() async {
+    _googleSignIn.disconnect();
+  }
+
 
   static final FacebookLogin facebookSignIn = new FacebookLogin();
 
@@ -56,14 +154,6 @@ class _LoginPageState extends State<LoginPage> {
     );
 
     return user;
-  }
-
-  Future<Null> _signOut(BuildContext context) async {
-    await facebookSignIn.logOut();
-    Scaffold.of(context).showSnackBar(new SnackBar(
-      content: new Text('Sign out button clicked'),
-    ));
-    print('Signed out');
   }
 
   @override
@@ -129,7 +219,8 @@ class _LoginPageState extends State<LoginPage> {
           minWidth: 200.0,
           height: 42.0,
           onPressed: () {
-            MaterialPageRoute(builder: (context) => Menu());
+            _handleSignIn();
+           // MaterialPageRoute(builder: (context) => Menu());
           },
           // color: canchaPrimaryLight,
           child: Text('Gmail', style: TextStyle(color: Colors.black)),
